@@ -75,7 +75,7 @@ if __name__ == '__main__':
     
     command_example = '''example:
     
-    python merge_folders.py /home/julien/en_cours /home/julien/output
+    python extract_1_minute.py /home/julien/en_cours /home/julien/output
 
     '''
     parser = argparse.ArgumentParser(epilog=command_example)

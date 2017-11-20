@@ -5,7 +5,7 @@
 import intervaltree as it
 import os
 import argparse
-# import ipdb
+import ipdb
 
 """
     After having computed a LDC speech activity detection on a corpus, and
@@ -32,17 +32,16 @@ import argparse
             wav_name_spkr1.rttm, ..., wav_name spkrN.rttm
         where spkr1, spkr2, ..., spkrN are the names of the speakers in the wav
         file.
-
-
-
 """
 
 
 def parser_rttm(rttm):
-    # take the path to an rttm file in input,
-    # and output the list of segments of speech
-    # for the corresponding speaker/wav in the form
-    # [ (on1, off1), (on2, off2), ..., (onN, offN)]
+    """
+    take the path to an rttm file in input,
+    and output the list of segments of speech
+    for the corresponding speaker/wav in the form
+    [ (on1, off1), (on2, off2), ..., (onN, offN)]
+    """
     sad_intervals = []
     with open(rttm, 'r') as fin:
         SAD = fin.readlines()
@@ -55,17 +54,27 @@ def parser_rttm(rttm):
 
 
 def eval_spkr_in_ldc(ldc_fold, gold_folder, gold_list_files, output):
-    # for each file in the ldc output, get all
-    # the gold files for each speaker
-
+    """ for each file in the ldc output, get all
+    the gold files for each speaker
+    """
     # loop over files in ldc folder
     for fin in os.listdir(ldc_fold):
+        print(fin)
         # get base name
         basename = fin.split('.')[0]
 
-        # get all corresponding files in gold
-        list_gold_spkr = [gold for gold in gold_list_files
-                          if gold.startswith(basename)]
+        # evaluate against transcriptions from Mother (MOT*, or
+        # in some cases FA1 if MOT* doesn't exist), and Child (CHI*)
+        list_gold_MOT = [gold for gold in gold_list_files
+                         if (gold.startswith(basename) and "MOT" in gold)]
+        # ipdb.set_trace()
+        if len(list_gold_MOT) == 0:
+            list_gold_MOT = [gold for gold in gold_list_files
+                             if (gold.startswith(basename) and "FA1" in gold)]
+        list_gold_CHI = [gold for gold in gold_list_files
+                         if (gold.startswith(basename) and "CHI" in gold)]
+
+        list_gold_spkr = list_gold_MOT + list_gold_CHI
 
         # for each SAD output file, attribute speaker label to the
         # detected speech intervals
@@ -76,9 +85,10 @@ def eval_spkr_in_ldc(ldc_fold, gold_folder, gold_list_files, output):
 
 
 def attribute_spkrs_in_ldc(fin, gold_folder, list_gold_spkr, output, basename):
-    # for each annotated speaker in the gold, look for the
-    # intervals detected by the ldc system that overlap,
-    # and label those detected with the name of the speaker in the gold.
+    """  for each annotated speaker in the gold, look for the
+    intervals detected by the ldc system that overlap,
+    and label those detected with the name of the speaker in the gold.
+    """
 
     ldc_seg = parser_rttm(fin)
     ldc_tree = it.IntervalTree.from_tuples(ldc_seg)
@@ -105,24 +115,31 @@ def attribute_spkrs_in_ldc(fin, gold_folder, list_gold_spkr, output, basename):
 
 
 def write_rttm(intervals, output, basename, spkr_name):
-    # take a list of intervals of speech for a given
-    # speaker, and write a rttm file
+    """ take a list of intervals of speech for a given
+    speaker, and write a rttm file
+    """
     output = 'tmp'
-    output_file_name = os.path.join(output,  '_'.join([basename, spkr_name]))
+    output_file_name = os.path.join(output,  '_'.join([basename, spkr_name]))\
+        + '.rttm'
+
+    # don't write any file if it doesn't contain any interval
+    if len(intervals) == 0:
+        print('did return')
+        return
+
+    print('did not return')
+
     with open(output_file_name, 'w') as fout:
-        print(intervals)
         for i in intervals:
-            print(i)
             on, off = i[0], i[1]
             fout.write(u'SPEAKER\t{}\t1\t{}\t{}\t<NA>\t<NA>\tspeech\t<NA>\n'
-                       .format('_'.join([basename, spkr_name]), on, off - on))
+                       .format(basename, on, off - on))
     return
 
 
 if __name__ == '__main__':
     command_example = '''example:
     python ldc_eval_per_speaker.py /home/julien/gold /home/julien/ldc
-
     '''
     parser = argparse.ArgumentParser(epilog=command_example)
     parser.add_argument('gold_folder', metavar='gold',
@@ -132,6 +149,10 @@ if __name__ == '__main__':
     parser.add_argument('output', metavar="output",
                         help='folder in which to write the per-speaker SAD')
     args = parser.parse_args()
+
+    # if output folder doesn't exist, create it
+    if not os.path.isdir(args.output):
+        os.makedirs(args.output)
 
     gold_list_files = os.listdir(args.gold_folder)
     eval_spkr_in_ldc(args.SAD_folder, args.gold_folder,
